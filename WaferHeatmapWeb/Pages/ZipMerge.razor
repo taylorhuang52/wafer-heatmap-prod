@@ -1,0 +1,167 @@
+@page "/zipmerge"
+@using System.IO.Compression
+@using System.Text
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>ZIP CSV 合併</PageTitle>
+
+<div class="page-toolbar">
+    <h4 class="tab-title">ZIP CSV 合併</h4>
+
+    <div class="toolbar-row">
+        <label>ZIP 檔：</label>
+        <InputFile OnChange="OnZipChange" accept=".zip"
+                   class="form-control" style="width:360px;display:inline-block"/>
+        @if (!string.IsNullOrEmpty(_zipName))
+        {
+            <small class="text-success ms-2">✔ @_zipName（@_csvFiles.Count 個 CSV）</small>
+        }
+    </div>
+
+    <div class="toolbar-row">
+        <label>表頭 CSV：</label>
+        <InputFile OnChange="OnHeaderChange" accept=".csv"
+                   class="form-control" style="width:360px;display:inline-block"/>
+        @if (!string.IsNullOrEmpty(_headerName))
+        {
+            <small class="text-success ms-2">✔ @_headerName</small>
+        }
+    </div>
+
+    <div class="toolbar-row">
+        <button class="btn btn-success" @onclick="RunMerge" disabled="@(!CanRun)">
+            ▶ 執行合併 → 下載 CSV
+        </button>
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <small class="@(_isError ? "text-danger" : "text-info") ms-2">@_status</small>
+        }
+    </div>
+</div>
+
+@if (_csvFiles.Count > 0)
+{
+    <div style="padding:12px 16px;">
+        <strong>ZIP 內找到的 CSV（@_csvFiles.Count 個）：</strong>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+            @foreach (var f in _csvFiles)
+            {
+                <span style="background:#e8f4fd;border:1px solid #b8d4ea;border-radius:3px;
+                             padding:1px 8px;font-size:.8rem;">@f</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    string       _zipName    = "";
+    string       _headerName = "";
+    string       _status     = "";
+    bool         _isError    = false;
+    List<string> _csvFiles   = new();
+    byte[]?      _zipBytes   = null;
+    string       _headerLine = "";
+
+    bool CanRun => _zipBytes != null && !string.IsNullOrEmpty(_headerLine);
+
+    async Task OnZipChange(InputFileChangeEventArgs e)
+    {
+        _zipName  = ""; _csvFiles = new(); _status = "讀取 ZIP…"; _isError = false;
+        try
+        {
+            using var ms = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 300 * 1024 * 1024).CopyToAsync(ms);
+            _zipBytes = ms.ToArray();
+            _zipName  = e.File.Name;
+            using var zip = new ZipArchive(new MemoryStream(_zipBytes), ZipArchiveMode.Read);
+            _csvFiles = zip.Entries
+                .Where(en => en.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                .Select(en => en.Name).OrderBy(n => n).ToList();
+            _status = "";
+        }
+        catch (Exception ex) { _isError = true; _status = "❌ " + ex.Message; }
+    }
+
+    async Task OnHeaderChange(InputFileChangeEventArgs e)
+    {
+        _headerName = ""; _status = "讀取表頭…"; _isError = false;
+        try
+        {
+            using var sr = new StreamReader(
+                e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024), Encoding.UTF8);
+            string text  = await sr.ReadToEndAsync();
+            _headerLine  = text
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault("").TrimStart('\uFEFF');
+            _headerName  = e.File.Name;
+            _status = "";
+        }
+        catch (Exception ex) { _isError = true; _status = "❌ " + ex.Message; }
+    }
+
+    [Inject] IJSRuntime JS { get; set; } = default!;
+
+    async Task RunMerge()
+    {
+        if (_zipBytes == null || string.IsNullOrEmpty(_headerLine)) return;
+        _isError = false; _status = "合併中…";
+        await Task.Yield();
+
+        try
+        {
+            var sb = new StringBuilder();
+            sb.Append('\uFEFF');
+            sb.AppendLine(_headerLine);
+
+            using var zip = new ZipArchive(new MemoryStream(_zipBytes), ZipArchiveMode.Read);
+            var entries = zip.Entries
+                .Where(en => en.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(en => en.Name).ToList();
+
+            int totalRows = 0;
+
+            foreach (var entry in entries)
+            {
+                string waferId = ExtractWaferId(entry.Name);
+                using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
+                string content   = await reader.ReadToEndAsync();
+                var lines = content.TrimStart('\uFEFF')
+                                   .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+                // 找資料起始行：Serial# 行的下一行
+                int dataStart = -1;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].StartsWith("Serial#", StringComparison.OrdinalIgnoreCase))
+                    { dataStart = i + 1; break; }
+                }
+                if (dataStart < 0) continue;
+
+                foreach (var line in lines.Skip(dataStart))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    int comma = line.IndexOf(',');
+                    string newLine = comma >= 0 ? waferId + line.Substring(comma) : line;
+                    sb.AppendLine(newLine);
+                    totalRows++;
+                }
+            }
+
+            byte[] bytes    = Encoding.UTF8.GetBytes(sb.ToString());
+            string lotId    = Path.GetFileNameWithoutExtension(_zipName).Split('-')[0].Split('_')[0];
+            string fileName = $"{lotId}_CPlog_Vertical_Merge.csv";
+            await JS.InvokeVoidAsync("downloadFile", fileName, "text/csv", bytes);
+            _status = $"✔ 完成！共合併 {entries.Count} 片，{totalRows:N0} 筆資料。";
+        }
+        catch (Exception ex) { _isError = true; _status = "❌ " + ex.Message; }
+    }
+
+    static string ExtractWaferId(string fileName)
+    {
+        var m = Regex.Match(fileName, @"-(\d{2})\d{8}");
+        if (m.Success) return m.Groups[1].Value;
+        var m2 = Regex.Match(fileName, @"-(\d+)");
+        return m2.Success ? m2.Groups[1].Value.PadLeft(2, '0') : "00";
+    }
+}

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WaferHeatmap.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+41a1b446bd5edf32d5d11eeefd1ee3d59e64c24c")]
 [assembly: System.Reflection.AssemblyProductAttribute("WaferHeatmap.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WaferHeatmap.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

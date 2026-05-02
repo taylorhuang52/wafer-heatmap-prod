@@ -9,3 +9,4 @@ D:\CS_folder\WaferHeatmapWeb\WaferHeatmapWeb\WaferHeatmapShared\obj\Debug\net10.
 D:\CS_folder\WaferHeatmapWeb\WaferHeatmapWeb\WaferHeatmapShared\obj\Debug\net10.0\refint\WaferHeatmap.Shared.dll
 D:\CS_folder\WaferHeatmapWeb\WaferHeatmapWeb\WaferHeatmapShared\obj\Debug\net10.0\WaferHeatmap.Shared.pdb
 D:\CS_folder\WaferHeatmapWeb\WaferHeatmapWeb\WaferHeatmapShared\obj\Debug\net10.0\ref\WaferHeatmap.Shared.dll
+D:\CS_folder\WaferHeatmapWeb\WaferHeatmapWeb\WaferHeatmapShared\obj\Debug\net10.0\WaferHeatmapShared.sourcelink.json

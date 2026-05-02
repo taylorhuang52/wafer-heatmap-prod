@@ -32,6 +32,20 @@
         <a class="dismiss">🗙</a>
     </div>
 
+    <script>
+        // 供 Blazor C# 呼叫，觸發瀏覽器下載檔案
+        window.downloadFile = (fileName, contentType, bytes) => {
+            const blob = new Blob([new Uint8Array(bytes)], { type: contentType });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 </html>
